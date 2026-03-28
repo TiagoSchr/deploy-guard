@@ -1,0 +1,62 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files (NEVER commit)
+.env
+.env.local
+.env.production
+.env.staging
+.env*.local
+
+# Reports (generated)
+deploy-guard-report.html
+deploy-guard-report.json
+*.sarif
+
+# Sensitive files
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+
+# Database dumps
+*.sql
+*.dump
+*.bak
+!tests/*.sql
+
+# Logs
+*.log
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+*.del
+*.bak
+*.tmp

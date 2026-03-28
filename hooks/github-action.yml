@@ -1,0 +1,79 @@
+name: Deploy Guard Security Scan
+
+on:
+  push:
+    branches: [main, master, staging, production]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+  security-events: write  # Required for SARIF upload
+
+jobs:
+  security-scan:
+    name: 🛡️ Pre-deploy Security Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Deploy Guard
+        run: pip install .
+
+      - name: Run Deploy Guard
+        id: guard
+        run: |
+          # Generate JSON report
+          deploy-guard . --target any --format json -o guard-report.json --exit-zero --no-banner
+          cat guard-report.json
+
+          # Generate SARIF for GitHub Security tab
+          deploy-guard . --target any --format sarif -o results.sarif --exit-zero --no-banner
+
+          # Generate HTML report
+          deploy-guard . --target any --format html -o guard-report.html --exit-zero --no-banner
+
+      - name: Check decision
+        run: |
+          DECISION=$(python -c "import json; d=json.load(open('guard-report.json')); print(d['summary']['decision'])")
+          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+          echo "### 🛡️ Deploy Guard Result: \`$DECISION\`" >> $GITHUB_STEP_SUMMARY
+
+          TOTAL=$(python -c "import json; d=json.load(open('guard-report.json')); print(d['summary']['total_issues'])")
+          CRITICAL=$(python -c "import json; d=json.load(open('guard-report.json')); print(d['summary']['critical'])")
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Issues | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| Decision | $DECISION |" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$DECISION" = "block" ]; then
+            echo "::error::Deploy Guard BLOCKED the deploy. Review the security report."
+            exit 1
+          elif [ "$DECISION" = "warn" ]; then
+            echo "::warning::Deploy Guard found warnings. Review before publishing."
+          fi
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: deploy-guard
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-guard-reports
+          path: |
+            guard-report.json
+            guard-report.html
+            results.sarif
+          retention-days: 30

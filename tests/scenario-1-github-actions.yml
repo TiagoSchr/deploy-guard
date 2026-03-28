@@ -1,0 +1,50 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+env:
+  NODE_ENV: production
+  AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
+  AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+  DATABASE_URL: postgres://admin:S3cr3tP@ss!@prod-db.internal.company.com:5432/productiondb
+  STRIPE_SECRET_KEY: "supersecretstripekey2024production"
+  SENDGRID_API_KEY: SG.aBcDeFgHiJkLmNoPqRsTuV.WxYzAbCdEfGhIjKlMnOpQrStUvWxYz
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.company.com
+          NEXT_PUBLIC_STRIPE_PK: pk_sample_51HG
+
+      - name: Deploy to AWS
+        run: |
+          aws s3 sync ./dist s3://company-prod-bucket --delete
+          aws cloudfront create-invalidation --distribution-id E1234ABCD --paths "/*"
+
+      - name: Send Slack notification
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+          --data '{"text":"Deploy successful!"}' \
+          https://hooks.slackwebhook.example.com/services/T0/B0/X
+
+      - name: Debug info
+        if: always()
+        run: |
+          echo "Database: $DATABASE_URL"
+          env | grep -v PATH

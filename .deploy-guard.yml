@@ -1,0 +1,25 @@
+# Deploy Guard Configuration
+# Place this file as .deploy-guard.yml in your project root.
+# See: https://github.com/TiagoSchr/deploy-guard
+
+# Deploy target type: frontend | backend | iac | any
+target: any
+
+# Enable stricter LGPD rules (recommended for Brazilian projects)
+strict_lgpd: false
+
+# Paths to exclude from scanning (in addition to defaults)
+# exclude:
+#   - "vendor/"
+#   - "third_party/"
+#   - "*.min.js"
+
+# Override decisions for specific rule IDs
+# overrides:
+#   secret-jwt: WARN          # Downgrade JWT warnings
+#   artifact-warn: ALLOW      # Allow CSV files
+
+# Custom safe email domains (extend the built-in list)
+# safe_email_domains:
+#   - "mycompany.com"
+#   - "internal.dev"

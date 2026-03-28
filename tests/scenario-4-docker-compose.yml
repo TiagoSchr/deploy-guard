@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://root:root123@postgres:5432/appdb
+      - REDIS_URL=redis://:password123@redis:6379
+      - JWT_SECRET=myjwtsecret
+      - DEBUG=true                     # debug em produção
+    volumes:
+      - ./logs:/app/logs
+      - ./.env:/app/.env               # montando .env no container
+      - ./backups:/app/backups         # backups expostos no container
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:14
+    restart: always
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root123       # senha fraca em produção
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"                    # banco exposto no host
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./dumps/production.sql:/docker-entrypoint-initdb.d/init.sql  # dump exposto
+
+  redis:
+    image: redis:7
+    command: redis-server --requirepass password123
+    ports:
+      - "6379:6379"                    # redis exposto no host
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl/privkey.pem:/etc/ssl/private/key.pem   # chave privada montada
+
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@company.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"                      # pgadmin exposto publicamente
+
+volumes:
+  pgdata:

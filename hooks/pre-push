@@ -1,0 +1,52 @@
+#!/bin/sh
+# Deploy Guard — pre-push hook
+# Instalar: cp hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+#
+# Escaneia arquivos staged antes do push.
+# Exit code 1 interrompe o push automaticamente.
+
+set -e
+
+GUARD="$(git rev-parse --show-toplevel)/deploy-guard.py"
+
+if [ ! -f "$GUARD" ]; then
+    echo "[Deploy Guard] Aviso: deploy-guard.py não encontrado. Hook ignorado."
+    exit 0
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "[Deploy Guard] Aviso: python3 não encontrado. Hook ignorado."
+    exit 0
+fi
+
+echo "[Deploy Guard] Escaneando arquivos antes do push..."
+
+# Cria diretório temporário com os arquivos staged
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+# Exporta apenas os arquivos staged para o diretório temporário
+git diff --cached --name-only | while IFS= read -r file; do
+    if [ -f "$file" ]; then
+        dir="$TMP_DIR/$(dirname "$file")"
+        mkdir -p "$dir"
+        git show ":$file" > "$TMP_DIR/$file" 2>/dev/null || true
+    fi
+done
+
+# Roda o scanner
+python3 "$GUARD" "$TMP_DIR" --target any
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 1 ]; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════"
+    echo "  ⛔ Deploy Guard BLOQUEOU o push."
+    echo "  Corrija os problemas acima antes de publicar."
+    echo "  Para pular (não recomendado): git push --no-verify"
+    echo "═══════════════════════════════════════════════════════"
+    exit 1
+fi
+
+echo "[Deploy Guard] ✅ Verificação passou. Push autorizado."
+exit 0

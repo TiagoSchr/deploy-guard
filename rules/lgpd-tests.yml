@@ -1,0 +1,207 @@
+# Deploy Guard — Testes das Regras LGPD
+# Cada caso documenta: o dado, se deve BLOCK/ALLOW, e por quê
+
+test_suite: lgpd-rules
+version: "1.0"
+
+# ─────────────────────────────────────────────
+# CPF
+# ─────────────────────────────────────────────
+tests:
+
+  # DEVE BLOQUEAR — CPF real com pontuação
+  - id: test-cpf-01
+    rule: lgpd-cpf-formatted
+    input: 'cpf: "123.456.789-00"'
+    expected_decision: BLOCK
+    rationale: "CPF real com pontuação padrão"
+
+  # DEVE BLOQUEAR — CPF real sem pontuação com contexto
+  - id: test-cpf-02
+    rule: lgpd-cpf-unformatted
+    input: 'tax_id = "12345678909"'
+    expected_decision: BLOCK
+    rationale: "CPF sem formato mas com contexto fiscal"
+
+  # DEVE IGNORAR — CPF fictício oficial (todos zeros)
+  - id: test-cpf-03
+    rule: lgpd-cpf-formatted
+    input: 'exemplo: "000.000.000-00"'
+    expected_decision: ALLOW
+    rationale: "CPF de exemplo oficial — falso positivo conhecido"
+
+  # DEVE IGNORAR — CPF com dígitos iguais (inválido por definição)
+  - id: test-cpf-04
+    rule: lgpd-cpf-unformatted
+    input: '"cpf": "11111111111"'
+    expected_decision: ALLOW
+    rationale: "CPF com todos os dígitos iguais é matematicamente inválido"
+
+  # DEVE BLOQUEAR — CPF em INSERT SQL
+  - id: test-cpf-05
+    rule: lgpd-sql-dump
+    input: "INSERT INTO users (cpf) VALUES ('987.654.321-00')"
+    expected_decision: BLOCK
+    rationale: "CPF real em dump SQL"
+
+# ─────────────────────────────────────────────
+# CNPJ
+# ─────────────────────────────────────────────
+
+  # DEVE BLOQUEAR — CNPJ de empresa real em contrato hardcoded
+  - id: test-cnpj-01
+    rule: lgpd-cnpj-formatted
+    input: 'supplier_cnpj = "11.222.333/0001-44"'
+    expected_decision: BLOCK
+    rationale: "CNPJ de fornecedor real em código"
+
+  # DEVE IGNORAR — CNPJ inválido fictício
+  - id: test-cnpj-02
+    rule: lgpd-cnpj-formatted
+    input: 'exemplo: "00.000.000/0000-00"'
+    expected_decision: ALLOW
+    rationale: "CNPJ obviamente fictício"
+
+# ─────────────────────────────────────────────
+# EMAIL
+# ─────────────────────────────────────────────
+
+  # DEVE ALERTAR — email real de cliente em código
+  - id: test-email-01
+    rule: lgpd-email-real
+    input: 'user_email = "joao.silva@empresa.com.br"'
+    expected_decision: WARN
+    rationale: "Email que parece ser de pessoa real"
+
+  # DEVE BLOQUEAR (escalado) — email real em SQL
+  - id: test-email-02
+    rule: lgpd-email-real
+    input: "INSERT INTO clientes (email) VALUES ('maria@empresa.com')"
+    expected_decision: BLOCK
+    rationale: "Email real em arquivo SQL deve escalar para BLOCK"
+
+  # DEVE IGNORAR — email claramente fictício/placeholder
+  - id: test-email-03
+    rule: lgpd-email-real
+    input: 'to: "user@example.com"'
+    expected_decision: ALLOW
+    rationale: "example.com é domínio de teste RFC 2606"
+
+  # DEVE IGNORAR — email de sistema (noreply)
+  - id: test-email-04
+    rule: lgpd-email-real
+    input: 'sender = "noreply@empresa.com"'
+    expected_decision: ALLOW
+    rationale: "Email de sistema, não de pessoa física"
+
+# ─────────────────────────────────────────────
+# TELEFONE
+# ─────────────────────────────────────────────
+
+  # DEVE ALERTAR — celular brasileiro com DDD
+  - id: test-phone-01
+    rule: lgpd-phone-br
+    input: 'telefone: "+55 11 99999-8888"'
+    expected_decision: WARN
+    rationale: "Telefone brasileiro real com DDD"
+
+  # DEVE ALERTAR — formato sem formatação em contexto
+  - id: test-phone-02
+    rule: lgpd-phone-br
+    input: 'whatsapp = "11988887777"'
+    expected_decision: WARN
+    rationale: "Celular sem formatação mas contexto de WhatsApp"
+
+  # DEVE IGNORAR — placeholder de telefone
+  - id: test-phone-03
+    rule: lgpd-phone-br
+    input: 'telefone: "(00) 00000-0000"'
+    expected_decision: ALLOW
+    rationale: "Telefone fictício padrão"
+
+# ─────────────────────────────────────────────
+# CARTÃO DE CRÉDITO
+# ─────────────────────────────────────────────
+
+  # DEVE BLOQUEAR — número de cartão Visa real
+  - id: test-card-01
+    rule: lgpd-credit-card
+    input: 'card_number = "4532015112830366"'
+    expected_decision: BLOCK
+    rationale: "PAN de cartão Visa válido pelo algoritmo de Luhn"
+
+  # DEVE IGNORAR — cartão de teste Stripe (falha no Luhn intencionalmente)
+  - id: test-card-02
+    rule: lgpd-credit-card
+    input: 'test_card = "4111111111111111"'
+    expected_decision: ALLOW
+    rationale: "Cartão de teste Stripe — documentado como fictício, Luhn válido mas padrão reconhecido"
+
+  # DEVE BLOQUEAR — CVV em contexto financeiro
+  - id: test-cvv-01
+    rule: lgpd-card-cvv
+    input: 'cvv: "372"'
+    expected_decision: BLOCK
+    rationale: "CVV explícito no campo nomeado cvv"
+
+  # DEVE IGNORAR — número 3 dígitos sem contexto
+  - id: test-cvv-02
+    rule: lgpd-card-cvv
+    input: 'retry_count = "3"'
+    expected_decision: ALLOW
+    rationale: "Número de 3 dígitos sem contexto financeiro — não é CVV"
+
+# ─────────────────────────────────────────────
+# DADOS SENSÍVEIS
+# ─────────────────────────────────────────────
+
+  # DEVE BLOQUEAR — campo de saúde com dado real
+  - id: test-health-01
+    rule: lgpd-health-data
+    input: 'diagnostico: "F32.0"'  # CID-10 para depressão
+    expected_decision: BLOCK
+    rationale: "Diagnóstico médico com CID — dado de saúde Art. 5, II"
+
+  # DEVE ALERTAR — referência a biometria
+  - id: test-biometric-01
+    rule: lgpd-biometric
+    input: 'fingerprint_hash: "abc123..."'
+    expected_decision: WARN
+    rationale: "Hash de impressão digital detectado"
+
+# ─────────────────────────────────────────────
+# ARTEFATOS
+# ─────────────────────────────────────────────
+
+  # DEVE BLOQUEAR — CSV com header de dados pessoais
+  - id: test-csv-01
+    rule: lgpd-csv-with-pii
+    input: "nome,cpf,email,telefone,nascimento"  # header de CSV
+    file_type: ".csv"
+    expected_decision: BLOCK
+    rationale: "CSV com colunas explícitas de dados pessoais"
+
+  # DEVE BLOQUEAR — JWT com CPF no payload
+  - id: test-jwt-01
+    rule: lgpd-jwt-pii
+    # payload decodificado: {"sub":"123","cpf":"123.456.789-00","exp":1234567890}
+    input: 'token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMiLCJjcGYiOiIxMjMuNDU2Ljc4OS0wMCIsImV4cCI6MTIzNDU2Nzg5MH0.signature"'
+    expected_decision: BLOCK
+    rationale: "JWT com CPF no payload — dado pessoal em token"
+
+  # DEVE PERMITIR — JWT com apenas claims padrão
+  - id: test-jwt-02
+    rule: lgpd-jwt-pii
+    # payload decodificado: {"sub":"user_id_opaque","exp":1234567890,"iat":1234567800}
+    input: 'token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyX2lkX29wYXF1ZSIsImV4cCI6MTIzNDU2Nzg5MCwiaWF0IjoxMjM0NTY3ODAwfQ.signature"'
+    expected_decision: ALLOW
+    rationale: "JWT com apenas sub/exp/iat — sem dados pessoais"
+
+# ─────────────────────────────────────────────
+# RESULTADO ESPERADO DO TESTE
+# ─────────────────────────────────────────────
+# Total: 22 casos
+# BLOCK esperados:  12
+# WARN esperados:    4
+# ALLOW esperados:   6
+# Falsos positivos evitados: 6 (CPFs dummy, emails placeholder, cartão de teste, etc.)
