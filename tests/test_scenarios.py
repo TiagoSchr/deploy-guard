@@ -117,7 +117,7 @@ class TestScenario5FrontendBundle:
     def test_blocks_deploy(self, issues):
         assert final_decision(issues) == "block"
 
-    def test_detects_stripe_in_frontend(self, issues):
+    def test_detects_credential(self, issues):
         creds = [i for i in issues if "credencial" in i.type.lower() or "CREDENCIAL" in i.type]
         assert len(creds) > 0
 
@@ -125,9 +125,9 @@ class TestScenario5FrontendBundle:
         cpf = [i for i in issues if "CPF" in i.type]
         assert len(cpf) > 0
 
-    def test_detects_emails(self, issues):
-        email = [i for i in issues if "Email" in i.type]
-        assert len(email) > 0
+    def test_detects_debug_active(self, issues):
+        debug = [i for i in issues if "DEBUG" in i.type]
+        assert len(debug) > 0
 
 
 class TestScenario6CleanBackend:
